@@ -66,23 +66,28 @@ function generate_assume(var::Union{Symbol, Expr}, dist, model_info)
     varname = gensym(:varname)
     sym, idcs, csym = gensym(:sym), gensym(:idcs), gensym(:csym)
     csym_str, indexing, syms = gensym(:csym_str), gensym(:indexing), gensym(:syms)
-    
+
+    varname_expr = quote
+        $sym, $idcs, $csym = Turing.@VarName $var
+    end
     if var isa Symbol
         varname_expr = quote
-            $sym, $idcs, $csym = Turing.@VarName $var
+            $varname_expr
             $csym = Symbol($(QuoteNode(model_info[:name])), $csym)
-            $syms = Symbol[$csym, $(QuoteNode(var))]
-            $varname = Turing.VarName($vi, $syms, "")
+            $indexing = ""
         end
     else
         varname_expr = quote
-            $sym, $idcs, $csym = Turing.@VarName $var
-            $csym_str = string($(QuoteNode(model_info[:name])))*string($csym)
+            $varname_expr
+            $csym = Symbol(string($(QuoteNode(model_info[:name])))*string($csym))
             $indexing = mapfoldl(string, *, $idcs, init = "")
-            $varname = Turing.VarName($vi, Symbol($csym_str), $sym, $indexing)
         end
     end
-    
+    varname_expr = quote
+        $varname_expr
+        $varname = Turing.VarName{$sym}($csym, $indexing, 1)
+    end
+        
     lp = gensym(:lp)
     return quote
         $varname_expr
@@ -372,13 +377,13 @@ function build_output(model_info)
             function $inner_function_name($model_name)
                 return $inner_function_name(Turing.VarInfo(), Turing.SampleFromPrior(), $model_name)
             end
-            function $inner_function_name($vi_name::Turing.VarInfo, $model_name)
+            function $inner_function_name($vi_name::Turing.Core.VarReplay.AbstractVarInfo, $model_name)
                 return $inner_function_name($vi_name, Turing.SampleFromPrior(), $model_name)
             end
 
             # Define the main inner function
             function $inner_function_name(
-                $vi_name::Turing.VarInfo, 
+                $vi_name::Turing.Core.VarReplay.AbstractVarInfo, 
                 $sampler_name::Turing.AnySampler, 
                 $model_name
                 )
